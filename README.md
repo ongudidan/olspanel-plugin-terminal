@@ -11,31 +11,45 @@ An official plugin for **OLSPanel** to provide a secure, native, interactive web
 ## Installation
 
 ### Method 1: Direct Command Line (Recommended)
-Run the following command as root on your OLSPanel server:
+You can install the latest release directly:
 ```bash
 sudo install_cp_plugin https://github.com/ongudidan/olspanel-plugin-terminal/releases/latest/download/terminal.zip
 ```
 
+Or target a specific version (e.g., `v1.0.0`):
+```bash
+sudo install_cp_plugin https://github.com/ongudidan/olspanel-plugin-terminal/releases/download/v1.0.0/terminal_v1.0.0.zip
+```
+
 ### Method 2: Manual Web UI
-1. Download `terminal.zip` from the latest release in this repository.
-2. Log into your **OLSPanel Admin Control Panel**.
-3. Go to **Plugins** -> **Install Plugin** and upload `terminal.zip`.
-4. Wait for the automatic reload to complete.
+1. Go to the **Releases** page of this repository.
+2. Download either the static `terminal.zip` or the version-specific `terminal_vX.Y.Z.zip` asset.
+3. Log into your **OLSPanel Admin Control Panel**.
+4. Go to **Plugins** -> **Install Plugin** and upload the downloaded zip.
+5. Wait for the automatic reload to complete.
 
 ## Development & Packing
-To pack the plugin manually, make sure Composer dependencies are installed first:
+To pack the plugin manually, run this from the root of the repository:
 ```bash
 cd terminal
 composer install --no-dev --optimize-autoloader
 cd ..
-zip -r terminal.zip terminal/
+zip -r terminal.zip terminal/ -x "*/.git*" -x "*.git*"
 ```
 
 ## Release Automation
-Simply push a version tag to trigger the automatic build and release:
+
+### Option 1: Trigger via GitHub UI (Auto-increment)
+1. Navigate to the **Actions** tab on GitHub.
+2. Select the **Build and Release...** workflow.
+3. Click the **Run workflow** button, select version level increment (`patch`, `minor`, `major`), and run.
+4. The system will automatically compute the next version, tag it, and publish the release.
+
+### Option 2: Manual Tag Push
+If you prefer manual versioning:
 ```bash
 git tag v1.0.0
 git push origin v1.0.0
 ```
-The GitHub Action will automatically fetch composer dependencies, package the plugin, and publish the asset.
+This triggers the Action to setup dependencies, compile, and publish that exact version.
 
