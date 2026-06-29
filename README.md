@@ -9,7 +9,15 @@ An official plugin for **OLSPanel** to provide a secure, native, interactive web
 - **Micro-animations & Fast Responses**: Extremely low latency shell streaming.
 
 ## Installation
-1. Download the `terminal.zip` from the latest release in this repository.
+
+### Method 1: Direct Command Line (Recommended)
+Run the following command as root on your OLSPanel server:
+```bash
+sudo install_cp_plugin https://github.com/ongudidan/olspanel-plugin-terminal/releases/latest/download/terminal.zip
+```
+
+### Method 2: Manual Web UI
+1. Download `terminal.zip` from the latest release in this repository.
 2. Log into your **OLSPanel Admin Control Panel**.
 3. Go to **Plugins** -> **Install Plugin** and upload `terminal.zip`.
 4. Wait for the automatic reload to complete.
