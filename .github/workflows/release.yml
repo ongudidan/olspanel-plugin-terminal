@@ -101,17 +101,18 @@ jobs:
             Secure in-browser SSH terminal integration for OLSPanel.
 
             ### Installation Options:
+            *Note: The following commands must be executed with root/administrative privileges (e.g. run directly as root or prefix with `sudo` depending on your distro).*
 
             #### Option 1: Install this specific version
             Run this command directly on your OLSPanel server:
             ```bash
-            sudo install_cp_plugin https://github.com/ongudidan/olspanel-plugin-terminal/releases/download/${{ env.TAG_NAME }}/terminal_${{ env.TAG_NAME }}.zip
+            install_cp_plugin https://github.com/ongudidan/olspanel-plugin-terminal/releases/download/${{ env.TAG_NAME }}/terminal_${{ env.TAG_NAME }}.zip
             ```
 
             #### Option 2: Always install the latest version
             Run this command directly on your OLSPanel server:
             ```bash
-            sudo install_cp_plugin https://github.com/ongudidan/olspanel-plugin-terminal/releases/latest/download/terminal.zip
+            install_cp_plugin https://github.com/ongudidan/olspanel-plugin-terminal/releases/latest/download/terminal.zip
             ```
 
             #### Option 3: Manual Web UI

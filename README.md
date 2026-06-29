@@ -10,15 +10,17 @@ An official plugin for **OLSPanel** to provide a secure, native, interactive web
 
 ## Installation
 
+*Note: The command line installation instructions must be run with root/administrative privileges (e.g. prefix with `sudo` or run directly as root depending on your system configuration).*
+
 ### Method 1: Direct Command Line (Recommended)
 You can install the latest release directly:
 ```bash
-sudo install_cp_plugin https://github.com/ongudidan/olspanel-plugin-terminal/releases/latest/download/terminal.zip
+install_cp_plugin https://github.com/ongudidan/olspanel-plugin-terminal/releases/latest/download/terminal.zip
 ```
 
 Or target a specific version (e.g., `v1.0.0`):
 ```bash
-sudo install_cp_plugin https://github.com/ongudidan/olspanel-plugin-terminal/releases/download/v1.0.0/terminal_v1.0.0.zip
+install_cp_plugin https://github.com/ongudidan/olspanel-plugin-terminal/releases/download/v1.0.0/terminal_v1.0.0.zip
 ```
 
 ### Method 2: Manual Web UI
