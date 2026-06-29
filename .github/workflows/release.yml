@@ -1,0 +1,56 @@
+name: Build and Release OLSPanel Terminal Plugin
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, xml, ctype, iconv
+
+      - name: Install Composer Dependencies
+        run: |
+          cd terminal
+          composer install --no-dev --optimize-autoloader
+
+      - name: Extract Version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Package Plugin Zip
+        run: |
+          zip -r terminal.zip terminal/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Version ${{ steps.get_version.outputs.VERSION }}
+          body: |
+            ## OLSPanel Interactive Web Terminal Plugin (v${{ steps.get_version.outputs.VERSION }})
+
+            Secure in-browser SSH terminal integration for OLSPanel.
+
+            ### Installation:
+            1. Download the `terminal.zip` archive attached below.
+            2. In your OLSPanel, navigate to **Admin Panel** -> **Plugins**.
+            3. Click **Upload Plugin** and select `terminal.zip`.
+            4. The plugin will automatically configure, install and register its menu item.
+          draft: false
+          prerelease: false
+          files: |
+            terminal.zip

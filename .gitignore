@@ -1,0 +1,18 @@
+# Ignore zip archives (except terminal_module.zip which is required by PHP code)
+*.zip
+!terminal/terminal_module.zip
+
+# Composer files
+/vendor/
+composer.phar
+
+# OS / Editor configuration files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

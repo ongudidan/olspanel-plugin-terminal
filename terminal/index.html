@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Web Terminal</title>
+
+<link rel="stylesheet" href="./assets/xterm.css" />
+
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: 'Courier New', monospace;
+    background-color: #1e1e1e;
+    color: #d4d4d4;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+.header {
+    background-color: #252526;
+    border-bottom: 1px solid #3e3e42;
+    padding: 10px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.header h1 {
+    font-size: 14px;
+}
+
+.connection-info {
+    font-size: 12px;
+}
+
+.connected { color: #4ec9b0; }
+.disconnected { color: #f48771; }
+
+#terminal {
+    flex: 1;
+    padding: 8px;
+    overflow: hidden; /* important */
+}
+
+.xterm {
+    height: 100%;
+}
+
+.xterm-viewport {
+    overflow-y: auto !important;
+}
+
+</style>
+</head>
+
+<body>
+<div class="container">
+    <div class="header">
+        <h1>Web Terminal</h1>
+        <div id="connectionStatus" class="connection-info disconnected">
+            Connecting...
+        </div>
+    </div>
+
+    <div id="terminal"></div>
+</div>
+
+<script src="./assets/xterm.js"></script>
+<script src="./assets/xterm-addon-fit.js"></script>
+
+<script>
+/* ===== START TERMINAL BACKEND + GET TOKEN ===== */
+function startTerminalServer() {
+    return fetch("/module/terminal/", { method: "GET" })
+        .then(res => res.json());
+}
+
+/* ===== XTERM INIT ===== */
+const term = new Terminal({
+    cursorBlink: true,
+    fontSize: 12,
+    scrollback: 5000,   // <-- REQUIRED
+    convertEol: true,  // <-- fixes line wrapping
+    theme: {
+        background: '#1e1e1e',
+        foreground: '#d4d4d4'
+    }
+});
+
+
+const fitAddon = new FitAddon.FitAddon();
+term.loadAddon(fitAddon);
+term.open(document.getElementById('terminal'));
+fitAddon.fit();
+
+/* ===== WEBSOCKET ===== */
+let ws = null;
+
+function initWebSocket(token) {
+    const protocol = location.protocol === "https:" ? "wss://" : "ws://";
+    const wsUrl = `${protocol}${location.host}/terminal/?token=${encodeURIComponent(token)}`;
+
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+        term.write("\r\n\x1b[32m[Connected]\x1b[0m\r\n");
+        setStatus(true);
+    };
+
+    ws.onmessage = (event) => {
+        try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === "output") {
+                term.write(msg.data);
+            } else if (msg.type === "info") {
+                term.write(`\r\n\x1b[36m${msg.data}\x1b[0m\r\n`);
+            } else if (msg.type === "error") {
+                term.write(`\r\n\x1b[31m${msg.data}\x1b[0m\r\n`);
+            }
+        } catch (e) {}
+    };
+
+    ws.onclose = () => {
+        term.write("\r\n\x1b[31m[Disconnected]\x1b[0m\r\n");
+        setStatus(false);
+    };
+
+    ws.onerror = () => {
+        term.write("\r\n\x1b[31m[WebSocket Error]\x1b[0m\r\n");
+        setStatus(false);
+    };
+}
+
+function setStatus(connected) {
+    const el = document.getElementById("connectionStatus");
+    el.textContent = connected ? "Connected" : "Disconnected";
+    el.className = "connection-info " + (connected ? "connected" : "disconnected");
+}
+
+/* ===== TERMINAL INPUT ===== */
+term.onData(data => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ input: data }));
+    }
+});
+
+/* ===== RESIZE ===== */
+window.addEventListener("resize", () => {
+    fitAddon.fit();
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ cols: term.cols, rows: term.rows }));
+    }
+});
+
+/* ===== AUTO START ===== */
+window.addEventListener("load", () => {
+    startTerminalServer()
+        .then(data => {
+            if (!data.token) {
+                term.write("\r\n\x1b[31m[Token missing]\x1b[0m\r\n");
+                return;
+            }
+            initWebSocket(data.token);
+        })
+        .catch(() => {
+            term.write("\r\n\x1b[31m[Failed to start terminal]\x1b[0m\r\n");
+        });
+});
+</script>
+</body>
+</html>
