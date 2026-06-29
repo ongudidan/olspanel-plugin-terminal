@@ -88,6 +88,7 @@ jobs:
       - name: Package Plugin Zip
         run: |
           zip -r terminal.zip terminal/ -x "*/.git*" -x "*.git*"
+          cp terminal.zip terminal_${{ env.TAG_NAME }}.zip
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -99,16 +100,25 @@ jobs:
 
             Secure in-browser SSH terminal integration for OLSPanel.
 
-            ### Installation:
+            ### Installation Options:
+
+            #### Option 1: Install this specific version
+            Run this command directly on your OLSPanel server:
+            ```bash
+            sudo install_cp_plugin https://github.com/ongudidan/olspanel-plugin-terminal/releases/download/${{ env.TAG_NAME }}/terminal_${{ env.TAG_NAME }}.zip
+            ```
+
+            #### Option 2: Always install the latest version
             Run this command directly on your OLSPanel server:
             ```bash
             sudo install_cp_plugin https://github.com/ongudidan/olspanel-plugin-terminal/releases/latest/download/terminal.zip
             ```
 
-            Alternatively (Manual Installation):
-            1. Download `terminal.zip` from the Assets below.
+            #### Option 3: Manual Web UI
+            1. Download `terminal_${{ env.TAG_NAME }}.zip` from the Assets below.
             2. Go to **Admin Panel** -> **Plugins** in your OLSPanel, click **Upload Plugin**, and select the downloaded file.
           draft: false
           prerelease: false
           files: |
             terminal.zip
+            terminal_${{ env.TAG_NAME }}.zip
