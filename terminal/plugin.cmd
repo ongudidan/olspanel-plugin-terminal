@@ -14,11 +14,24 @@ fi
 if ! php -m | grep -qi ssh2 2>/dev/null; then
   echo "Installing PHP SSH2 extension..."
   PHP_VER=$(php -r "echo PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;" 2>/dev/null)
-  if [ -n "$PHP_VER" ]; then
-    apt-get update -y
-    apt-get install -y "php${PHP_VER}-ssh2" || apt-get install -y php-ssh2
+  if [ -f /etc/redhat-release ] || [ -f /etc/centos-release ] || [ -f /etc/almalinux-release ]; then
+    PM_BIN="dnf"
+    if ! command -v dnf &> /dev/null; then
+      PM_BIN="yum"
+    fi
+    if [ -n "$PHP_VER" ]; then
+      PHP_VER_NO_DOT=$(echo "$PHP_VER" | tr -d '.')
+      sudo $PM_BIN install -y "lsphp${PHP_VER_NO_DOT}-pecl-ssh2" || sudo $PM_BIN install -y php-ssh2
+    else
+      sudo $PM_BIN install -y php-ssh2
+    fi
   else
-    apt-get update -y && apt-get install -y php-ssh2
+    if [ -n "$PHP_VER" ]; then
+      apt-get update -y
+      apt-get install -y "php${PHP_VER}-ssh2" || apt-get install -y php-ssh2
+    else
+      apt-get update -y && apt-get install -y php-ssh2
+    fi
   fi
 fi
 
