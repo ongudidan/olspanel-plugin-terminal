@@ -149,6 +149,38 @@ if pattern.search(content):
 "
 fi
 
+# Patch 3b: Fix AttributeError NoneType object has no attribute get in users/views.py for superuser user_data
+VIEWS_FILE="$BASE_DIR/users/views.py"
+if [ -f "$VIEWS_FILE" ]; then
+  python3 -c "
+import os
+file_path = '$VIEWS_FILE'
+with open(file_path, 'r') as f:
+    content = f.read()
+
+target = '''            if request.user:
+                user_data = get_user_data_by_id(request.user.id)
+                whm = user_data.get('whm', 0)
+            elif request.admin_user:
+                user_data = get_user_data_by_id(request.admin_user.id)
+                whm = user_data.get('whm', 0)'''
+
+replacement = '''            if request.user:
+                user_data = get_user_data_by_id(request.user.id)
+                whm = user_data.get('whm', 0) if user_data else (1 if request.user.is_superuser or request.user.is_staff else 0)
+            elif request.admin_user:
+                user_data = get_user_data_by_id(request.admin_user.id)
+                whm = user_data.get('whm', 0) if user_data else (1 if request.admin_user.is_superuser or request.admin_user.is_staff else 0)'''
+
+if target in content:
+    with open(file_path, 'w') as f:
+        f.write(content.replace(target, replacement))
+    import py_compile
+    py_compile.compile(file_path)
+    print('views.py patched successfully')
+"
+fi
+
 # Patch 4: Solve FOUC (Color Flicker) & dynamic SVG fetch lag on base.html files
 python3 -c "
 import os, re
