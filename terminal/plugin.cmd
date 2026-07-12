@@ -57,19 +57,20 @@ if [ -f "$SSHD_CONFIG" ]; then
   fi
 fi
 
-# Automatically deploy the Django module from the bundled webterminal_module.zip
-MODULE_ZIP="$BASE_DIR/3rdparty/webterminal/webterminal_module.zip"
+# Deploy the Django webterminal module from the bundled source folder
+MODULE_SRC="$BASE_DIR/3rdparty/webterminal/webterminal"
 MODULE_DEST="$BASE_DIR/modules/webterminal"
 
-if [ -f "$MODULE_ZIP" ]; then
+if [ -d "$MODULE_SRC" ]; then
   mkdir -p "$BASE_DIR/modules"
-  unzip -o "$MODULE_ZIP" -d "$BASE_DIR/modules/"
+  cp -r "$MODULE_SRC" "$BASE_DIR/modules/"
   chown -R www-data:www-data "$MODULE_DEST"
-  echo "✅ Django webterminal module unzipped and deployed to $MODULE_DEST"
+  echo "✅ Django webterminal module deployed to $MODULE_DEST"
 else
-  echo "❌ Error: Django webterminal module zip not found at $MODULE_ZIP"
+  echo "❌ Error: Django webterminal module source not found at $MODULE_SRC"
   exit 1
 fi
+
 USER_BASE_HTML="$BASE_DIR/users/templates/users/base.html"
 WHM_BASE_HTML="$BASE_DIR/whm/templates/whm/base.html"
 USER_FOOTER_HTML="$BASE_DIR/users/templates/users/footer.html"

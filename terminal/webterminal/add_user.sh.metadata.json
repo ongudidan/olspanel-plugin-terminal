@@ -1,0 +1,5 @@
+{
+  "artifactType": "ARTIFACT_TYPE_OTHER",
+  "summary": "Updated add_user.sh to implement automated VirtFS (mount namespace) chroot jails for regular users and secure privileges",
+  "updatedAt": "2026-06-28T12:59:58.912561022Z"
+}
