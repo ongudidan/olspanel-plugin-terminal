@@ -58,7 +58,7 @@ if [ -f "$SSHD_CONFIG" ]; then
 fi
 
 # Automatically deploy the Django module from the bundled webterminal_module.zip
-MODULE_ZIP="$BASE_DIR/3rdparty/terminal/webterminal_module.zip"
+MODULE_ZIP="$BASE_DIR/3rdparty/webterminal/webterminal_module.zip"
 MODULE_DEST="$BASE_DIR/modules/webterminal"
 
 if [ -f "$MODULE_ZIP" ]; then
@@ -227,7 +227,7 @@ for file_path in files:
 "
 
 # Deploy SVG vector icon for color adaptation support
-ICON_SRC="$BASE_DIR/3rdparty/terminal/plugin_icon.svg"
+ICON_SRC="$BASE_DIR/3rdparty/webterminal/plugin_icon.svg"
 ICON_DEST="$BASE_DIR/media/icon/terminal.svg"
 
 if [ -f "$ICON_SRC" ]; then
