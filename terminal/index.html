@@ -79,8 +79,9 @@ body {
 <script>
 /* ===== START TERMINAL BACKEND + GET TOKEN ===== */
 function startTerminalServer() {
-    return fetch("/module/terminal/", { method: "GET" })
+    return fetch("/module/webterminal/", { method: "GET" })
         .then(res => res.json());
+
 }
 
 /* ===== XTERM INIT ===== */
