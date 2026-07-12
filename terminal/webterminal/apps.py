@@ -12,14 +12,10 @@ class WebterminalConfig(AppConfig):
             from django.http import JsonResponse
             import json
 
-            # Store original function
-            if not hasattr(whm_views, '_original_api_plugins'):
-                whm_views._original_api_plugins = whm_views.api_plugins
-
-            original_api_plugins = whm_views._original_api_plugins
+            current_api_plugins = whm_views.api_plugins
 
             def patched_api_plugins(request):
-                response = original_api_plugins(request)
+                response = current_api_plugins(request)
                 if isinstance(response, JsonResponse):
                     try:
                         data = json.loads(response.content.decode('utf-8'))
