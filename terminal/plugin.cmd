@@ -62,6 +62,8 @@ MODULE_SRC="$BASE_DIR/3rdparty/webterminal/webterminal"
 MODULE_DEST="$BASE_DIR/modules/webterminal"
 
 if [ -d "$MODULE_SRC" ]; then
+  # Clean up existing module directory to prevent stale/duplicate file configurations
+  rm -rf "$MODULE_DEST"
   mkdir -p "$BASE_DIR/modules"
   cp -r "$MODULE_SRC" "$BASE_DIR/modules/"
   chown -R www-data:www-data "$MODULE_DEST"
@@ -229,7 +231,7 @@ for file_path in files:
 
 # Deploy SVG vector icon for color adaptation support
 ICON_SRC="$BASE_DIR/3rdparty/webterminal/plugin_icon.svg"
-ICON_DEST="$BASE_DIR/media/icon/terminal.svg"
+ICON_DEST="$BASE_DIR/media/icon/webterminal.svg"
 
 if [ -f "$ICON_SRC" ]; then
   cp -f "$ICON_SRC" "$ICON_DEST"
