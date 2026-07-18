@@ -22,34 +22,45 @@ class SshTerminal implements MessageComponentInterface {
     // ===== READ QUERY PARAMS =====
     $req = $conn->httpRequest;
     parse_str($req->getUri()->getQuery(), $params);
-
     $clientToken = isset($params['token']) && is_string($params['token']) ? $params['token'] : null;
 
-    // ===== LOAD ENV (STATIC CONFIG) =====
-    $token = getenv('TERMINAL_TOKEN');
-    $host  = getenv('TERMINAL_HOST') ?: '127.0.0.1';
-    $user  = getenv('TERMINAL_USER');
-    $pass  = getenv('TERMINAL_PASS');
-	$port  = getenv('TERMINAL_PORT') ?: '22';
-
-    // ===== VALIDATION =====
-    if (!is_string($clientToken) || !is_string($token) || !$user || !$pass) {
-        $conn->send(json_encode([
-            'type' => 'error',
-            'data' => 'Missing terminal credentials'
-        ]));
+    if (!$clientToken) {
+        $conn->send(json_encode(['type' => 'error', 'data' => 'Token required']));
         $conn->close();
         return;
     }
 
-    if (!hash_equals($token, $clientToken)) {
-        $conn->send(json_encode([
-            'type' => 'error',
-            'data' => 'Invalid terminal token'
-        ]));
+    // ===== LOAD SESSION FROM FILE =====
+    $sessions_file = '/tmp/webterminal_sessions.json';
+    if (!file_exists($sessions_file)) {
+        $conn->send(json_encode(['type' => 'error', 'data' => 'Session store not found']));
         $conn->close();
         return;
     }
+
+    $sessions = json_decode(file_get_contents($sessions_file), true);
+    if (!is_array($sessions) || !isset($sessions[$clientToken])) {
+        $conn->send(json_encode(['type' => 'error', 'data' => 'Invalid or expired token']));
+        $conn->close();
+        return;
+    }
+
+    $sessionData = $sessions[$clientToken];
+    
+    // Remove token after retrieve to prevent replay/reuse attacks
+    unset($sessions[$clientToken]);
+    file_put_contents($sessions_file, json_encode($sessions, JSON_FORCE_OBJECT));
+
+    if (time() - $sessionData['created_at'] > 30) {
+        $conn->send(json_encode(['type' => 'error', 'data' => 'Token has expired']));
+        $conn->close();
+        return;
+    }
+
+    $host = '127.0.0.1';
+    $user = $sessionData['username'];
+    $pass = $sessionData['password'];
+    $port = isset($sessionData['port']) ? (string)$sessionData['port'] : '22';
 
     // ===== INIT CONNECTION STORAGE =====
     $this->ssh_connections[$conn->resourceId] = [

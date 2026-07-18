@@ -8,6 +8,8 @@ import random
 import string
 import zipfile
 import shutil
+import time
+import socket
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.http import JsonResponse,Http404
@@ -80,6 +82,36 @@ def index(request):
     ]
     subprocess.run(cmd, capture_output=True, text=True)
 
+    # ===== SAVE SESSION TO JSON FILE =====
+    sessions_file = '/tmp/webterminal_sessions.json'
+    sessions = {}
+    if os.path.exists(sessions_file):
+        try:
+            with open(sessions_file, 'r') as f:
+                sessions = json.load(f)
+                if not isinstance(sessions, dict):
+                    sessions = {}
+        except Exception:
+            pass
+
+    sessions[token] = {
+        "username": username,
+        "password": password,
+        "port": t_port,
+        "created_at": time.time()
+    }
+
+    # Clean old sessions (older than 2 minutes)
+    now = time.time()
+    sessions = {t: s for t, s in sessions.items() if now - s["created_at"] < 120}
+
+    try:
+        with open(sessions_file, 'w') as f:
+            json.dump(sessions, f)
+        os.chmod(sessions_file, 0o600)
+    except Exception:
+        pass
+
     try:
         PHP_BINARY = AppSettings.objects.get(
             setting_key='cgi_bin'
@@ -95,34 +127,40 @@ def index(request):
         PROJECT_ROOT, "3rdparty/webterminal/server.php"
     )
 
-    subprocess.run(
-        "kill -9 $(lsof -t -i:9090)",
-        shell=True,
-        check=False)
-
-    env = os.environ.copy()
-    env.update({
-        "TERMINAL_TOKEN": str(token),
-        "TERMINAL_USER": str(username),
-        "TERMINAL_PASS": str(password),
-        "TERMINAL_PORT": str(t_port),   # ✅ FIX
-        })
-
-
-    # ===== START PROCESS =====
+    # ===== CHECK IF PORT 9090 IS RUNNING =====
+    server_running = False
     try:
-        process = subprocess.Popen(
-            [PHP_BINARY, server_file],
-            env=env,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True  # detach from Django
-        )
-        pid = process.pid
-        status = "ok"
-    except Exception as e:
-        pid = None
-        status = "error"
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.5)
+            s.connect(('127.0.0.1', 9090))
+            server_running = True
+    except socket.error:
+        pass
+
+    pid = None
+    status = "ok"
+    if not server_running:
+        try:
+            log_file = open('/tmp/webterminal.log', 'w')
+            process = subprocess.Popen(
+                [PHP_BINARY, server_file],
+                stdout=log_file,
+                stderr=log_file,
+                start_new_session=True  # detach from Django
+            )
+            pid = process.pid
+            
+            # Wait for server to start listening (up to 2 seconds)
+            for _ in range(20):
+                try:
+                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                        s.settimeout(0.1)
+                        s.connect(('127.0.0.1', 9090))
+                        break
+                except socket.error:
+                    time.sleep(0.1)
+        except Exception as e:
+            status = "error"
 
     return JsonResponse({
         "status": status,
