@@ -43,13 +43,69 @@ from file_manager.models import *
 from django.conf import settings
 from whm.function import * 
 
+def get_php_binary():
+    """
+    Finds a valid PHP CLI binary with the ssh2 extension loaded.
+    Searches system PATH, standard binary locations, and versioned paths.
+    """
+    candidates = []
+
+    # 1. System default php binary in PATH
+    which_php = shutil.which('php')
+    if which_php:
+        candidates.append(which_php)
+
+    # 2. Common standard CLI paths
+    common_paths = [
+        '/usr/bin/php',
+        '/usr/local/bin/php',
+        '/bin/php',
+        '/usr/bin/php8.5',
+        '/usr/bin/php8.4',
+        '/usr/bin/php8.3',
+        '/usr/bin/php8.2',
+        '/usr/bin/php8.1',
+        '/usr/bin/php8.0',
+        '/usr/bin/php7.4',
+    ]
+    for p in common_paths:
+        if p not in candidates:
+            candidates.append(p)
+
+    # 3. Check AppSettings cgi_bin if configured
+    try:
+        from users.models import AppSettings
+        cgi_val = AppSettings.objects.get(setting_key='cgi_bin').setting_value.strip()
+        replaced = cgi_val.replace('php-cgi', 'php')
+        if replaced not in candidates:
+            candidates.append(replaced)
+    except Exception:
+        pass
+
+    # Priority 1: Pick an executable candidate that has the ssh2 extension loaded
+    for cand in candidates:
+        if os.path.isfile(cand) and os.access(cand, os.X_OK):
+            try:
+                res = subprocess.run([cand, '-m'], capture_output=True, text=True, timeout=2)
+                if 'ssh2' in res.stdout.lower():
+                    return cand
+            except Exception:
+                pass
+
+    # Priority 2: Fall back to any executable candidate
+    for cand in candidates:
+        if os.path.isfile(cand) and os.access(cand, os.X_OK):
+            return cand
+
+    return 'php'
+
 
 @loginadminoruser
 def index(request):
     # ===== GET PARAMS =====
     token = generate_text(32)
     password = generate_text()
-    t_port = get_current_ssh_port()
+    t_port = get_current_ssh_port() or 22
 
     # Determine if admin is impersonating a user (request.user != request.admin_user)
     is_impersonating = False
@@ -108,18 +164,9 @@ def index(request):
     try:
         with open(sessions_file, 'w') as f:
             json.dump(sessions, f)
-        os.chmod(sessions_file, 0o600)
+        os.chmod(sessions_file, 0o660)
     except Exception:
         pass
-
-    try:
-        PHP_BINARY = AppSettings.objects.get(
-            setting_key='cgi_bin'
-        ).setting_value.strip()
-        if 'php-cgi' in PHP_BINARY:
-            PHP_BINARY = PHP_BINARY.replace('php-cgi', 'php')
-    except AppSettings.DoesNotExist:
-        PHP_BINARY = '/usr/bin/php8.2'
 
     # ===== SERVER FILE =====
     PROJECT_ROOT = settings.BASE_DIR
@@ -140,27 +187,60 @@ def index(request):
     pid = None
     status = "ok"
     if not server_running:
+        # First attempt: Try systemctl if webterminal service exists
         try:
-            log_file = open('/tmp/webterminal.log', 'w')
-            process = subprocess.Popen(
-                [PHP_BINARY, server_file],
-                stdout=log_file,
-                stderr=log_file,
-                start_new_session=True  # detach from Django
-            )
-            pid = process.pid
-            
-            # Wait for server to start listening (up to 2 seconds)
-            for _ in range(20):
+            res = subprocess.run(['systemctl', 'restart', 'webterminal'], capture_output=True, timeout=3)
+            if res.returncode == 0:
+                for _ in range(20):
+                    try:
+                        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                            s.settimeout(0.1)
+                            s.connect(('127.0.0.1', 9090))
+                            server_running = True
+                            break
+                    except socket.error:
+                        time.sleep(0.1)
+        except Exception:
+            pass
+
+        # Second attempt: Spawn standalone server.php process if still not listening
+        if not server_running:
+            try:
+                PHP_BINARY = get_php_binary()
+                log_file = open('/tmp/webterminal.log', 'a')
+                log_file.write(f"\n[{time.ctime()}] Starting webterminal daemon with binary: {PHP_BINARY}\n")
+                log_file.flush()
+
+                process = subprocess.Popen(
+                    [PHP_BINARY, server_file],
+                    stdout=log_file,
+                    stderr=log_file,
+                    start_new_session=True  # detach from Django
+                )
+                pid = process.pid
+                
+                # Wait for server to start listening (up to 3 seconds)
+                for _ in range(30):
+                    try:
+                        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                            s.settimeout(0.1)
+                            s.connect(('127.0.0.1', 9090))
+                            server_running = True
+                            break
+                    except socket.error:
+                        time.sleep(0.1)
+
+                if not server_running:
+                    status = "error"
+                    with open('/tmp/webterminal.log', 'a') as f:
+                        f.write(f"[{time.ctime()}] ERROR: server.php failed to bind to 127.0.0.1:9090 within timeout.\n")
+            except Exception as e:
+                status = "error"
                 try:
-                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                        s.settimeout(0.1)
-                        s.connect(('127.0.0.1', 9090))
-                        break
-                except socket.error:
-                    time.sleep(0.1)
-        except Exception as e:
-            status = "error"
+                    with open('/tmp/webterminal.log', 'a') as f:
+                        f.write(f"[{time.ctime()}] Exception launching server.php: {e}\n")
+                except Exception:
+                    pass
 
     return JsonResponse({
         "status": status,

@@ -49,9 +49,9 @@ class SshTerminal implements MessageComponentInterface {
     
     // Remove token after retrieve to prevent replay/reuse attacks
     unset($sessions[$clientToken]);
-    file_put_contents($sessions_file, json_encode($sessions, JSON_FORCE_OBJECT));
+    file_put_contents($sessions_file, json_encode($sessions, JSON_FORCE_OBJECT), LOCK_EX);
 
-    if (time() - $sessionData['created_at'] > 30) {
+    if (time() - $sessionData['created_at'] > 120) {
         $conn->send(json_encode(['type' => 'error', 'data' => 'Token has expired']));
         $conn->close();
         return;
@@ -60,7 +60,7 @@ class SshTerminal implements MessageComponentInterface {
     $host = '127.0.0.1';
     $user = $sessionData['username'];
     $pass = $sessionData['password'];
-    $port = isset($sessionData['port']) ? (string)$sessionData['port'] : '22';
+    $port = !empty($sessionData['port']) ? (string)$sessionData['port'] : '22';
 
     // ===== INIT CONNECTION STORAGE =====
     $this->ssh_connections[$conn->resourceId] = [

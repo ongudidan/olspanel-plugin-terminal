@@ -10,50 +10,87 @@ if [ ! -d "$BASE_DIR" ]; then
   fi
 fi
 
-# Detect active PHP version and install php-ssh2 extension if missing
-if ! php -m | grep -qi ssh2 2>/dev/null; then
-  echo "Installing PHP SSH2 extension..."
-  PHP_VER=$(php -r "echo PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;" 2>/dev/null)
-  if [ -f /etc/redhat-release ] || [ -f /etc/centos-release ] || [ -f /etc/almalinux-release ]; then
+# Detect active PHP version and install php-cli and php-ssh2 extension if missing
+echo "Checking PHP and SSH2 extension..."
+if ! command -v php >/dev/null 2>&1 || ! php -m 2>/dev/null | grep -qi ssh2; then
+  echo "Installing PHP CLI and SSH2 extension..."
+  if [ -f /etc/redhat-release ] || [ -f /etc/centos-release ] || [ -f /etc/almalinux-release ] || [ -f /etc/rocky-release ]; then
     PM_BIN="dnf"
     if ! command -v dnf &> /dev/null; then
       PM_BIN="yum"
     fi
-    if [ -n "$PHP_VER" ]; then
-      PHP_VER_NO_DOT=$(echo "$PHP_VER" | tr -d '.')
-      sudo $PM_BIN install -y "lsphp${PHP_VER_NO_DOT}-pecl-ssh2" || sudo $PM_BIN install -y php-ssh2
-    else
-      sudo $PM_BIN install -y php-ssh2
-    fi
+    $PM_BIN install -y epel-release 2>/dev/null || true
+    $PM_BIN install -y php-cli php-pecl-ssh2 2>/dev/null || $PM_BIN install -y php-cli php-ssh2 2>/dev/null || true
   else
-    if [ -n "$PHP_VER" ]; then
-      apt-get update -y
-      apt-get install -y "php${PHP_VER}-ssh2" || apt-get install -y php-ssh2
-    else
-      apt-get update -y && apt-get install -y php-ssh2
+    # Debian / Ubuntu
+    export DEBIAN_FRONTEND=noninteractive
+
+    # Remove broken third-party repositories if any
+    if [ -f /etc/os-release ]; then
+      . /etc/os-release
+      if [ "${VERSION_CODENAME:-}" = "resolute" ] || [ "${UBUNTU_CODENAME:-}" = "resolute" ]; then
+        rm -f /etc/apt/sources.list.d/*ondrej* 2>/dev/null || true
+      fi
+    fi
+
+    # Update package lists without letting broken repos abort the installer
+    apt-get update -y 2>/dev/null || apt-get update -y --allow-releaseinfo-change 2>/dev/null || true
+
+    # Install php-cli and php-ssh2 WITHOUT recommends so apache2 is NOT installed
+    apt-get install -y --no-install-recommends php-cli php-ssh2 2>/dev/null || \
+      apt-get install -y php-cli php-ssh2 2>/dev/null || true
+
+    # If php CLI is present but ssh2 is missing for active php version, try version-specific package
+    if command -v php >/dev/null 2>&1 && ! php -m 2>/dev/null | grep -qi ssh2; then
+      PHP_VER=$(php -r "echo PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;" 2>/dev/null || true)
+      if [ -n "$PHP_VER" ]; then
+        apt-get install -y --no-install-recommends "php${PHP_VER}-cli" "php${PHP_VER}-ssh2" 2>/dev/null || true
+      fi
     fi
   fi
 fi
 
+if command -v php >/dev/null 2>&1 && php -m 2>/dev/null | grep -qi ssh2; then
+  echo "✅ PHP SSH2 extension ready: $(php -v 2>/dev/null | head -n 1)"
+else
+  echo "⚠️ Warning: php-ssh2 extension could not be verified automatically."
+fi
+
 # Configure SSHD to allow password authentication for loopback connections (safe & required for PHP terminal wrapper)
 SSHD_CONFIG="/etc/ssh/sshd_config"
-if [ -f "$SSHD_CONFIG" ]; then
-  if ! grep -q "Match Address 127.0.0.1,::1" "$SSHD_CONFIG"; then
-    echo -e "\nMatch Address 127.0.0.1,::1\n    PasswordAuthentication yes" >> "$SSHD_CONFIG"
-    if sshd -t; then
-      if systemctl is-active --quiet sshd 2>/dev/null; then
-        systemctl restart sshd
-      elif systemctl is-active --quiet ssh 2>/dev/null; then
-        systemctl restart ssh
-      fi
-      echo "✅ SSHD loopback password authentication configured successfully"
-    else
-      # Revert changes if configuration test fails
-      sed -i '/Match Address 127.0.0.1,::1/,+1d' "$SSHD_CONFIG"
-      echo "❌ Error: sshd config test failed after adding loopback match, reverted changes"
+SSHD_D_DIR="/etc/ssh/sshd_config.d"
+
+if [ -d "$SSHD_D_DIR" ]; then
+  cat << 'EOF' > "$SSHD_D_DIR/99-webterminal.conf"
+Match Address 127.0.0.1,::1
+    PasswordAuthentication yes
+EOF
+  chmod 600 "$SSHD_D_DIR/99-webterminal.conf"
+  if sshd -t 2>/dev/null; then
+    if systemctl is-active --quiet sshd 2>/dev/null; then
+      systemctl restart sshd
+    elif systemctl is-active --quiet ssh 2>/dev/null; then
+      systemctl restart ssh
     fi
+    echo "✅ SSHD loopback password authentication configured in $SSHD_D_DIR/99-webterminal.conf"
   else
-    echo "ℹ️ SSHD loopback password authentication already configured"
+    rm -f "$SSHD_D_DIR/99-webterminal.conf"
+    echo "⚠️ Drop-in sshd config failed test; trying /etc/ssh/sshd_config fallback"
+  fi
+fi
+
+if [ -f "$SSHD_CONFIG" ] && ! grep -q "Match Address 127.0.0.1,::1" "$SSHD_CONFIG" && [ ! -f "$SSHD_D_DIR/99-webterminal.conf" ]; then
+  echo -e "\nMatch Address 127.0.0.1,::1\n    PasswordAuthentication yes" >> "$SSHD_CONFIG"
+  if sshd -t 2>/dev/null; then
+    if systemctl is-active --quiet sshd 2>/dev/null; then
+      systemctl restart sshd
+    elif systemctl is-active --quiet ssh 2>/dev/null; then
+      systemctl restart ssh
+    fi
+    echo "✅ SSHD loopback password authentication configured in $SSHD_CONFIG"
+  else
+    sed -i '/Match Address 127.0.0.1,::1/,+1d' "$SSHD_CONFIG"
+    echo "❌ Error: sshd config test failed after adding loopback match, reverted changes"
   fi
 fi
 
@@ -66,6 +103,8 @@ if [ -d "$MODULE_SRC" ]; then
   rm -rf "$MODULE_DEST"
   mkdir -p "$BASE_DIR/modules"
   cp -r "$MODULE_SRC" "$BASE_DIR/modules/"
+  sed -i 's/\r$//' "$MODULE_DEST/add_user.sh" 2>/dev/null || true
+  chmod +x "$MODULE_DEST/add_user.sh" 2>/dev/null || true
   chown -R www-data:www-data "$MODULE_DEST"
   echo "✅ Django webterminal module deployed to $MODULE_DEST"
 else
@@ -142,6 +181,34 @@ else
   echo "❌ Error: SVG icon source not found: $ICON_SRC"
   exit 1
 fi
+
+# Setup systemd service for persistent Web Terminal WebSocket daemon
+PHP_BIN_FOR_SERVICE="$(command -v php 2>/dev/null || echo '/usr/bin/php')"
+SERVICE_FILE="/etc/systemd/system/webterminal.service"
+cat << EOF > "$SERVICE_FILE"
+[Unit]
+Description=OLSPanel Web Terminal WebSocket Daemon
+After=network.target ssh.service sshd.service
+
+[Service]
+Type=simple
+User=root
+Group=www-data
+WorkingDirectory=$BASE_DIR/3rdparty/webterminal
+ExecStart=$PHP_BIN_FOR_SERVICE $BASE_DIR/3rdparty/webterminal/server.php
+Restart=always
+RestartSec=3
+StandardOutput=append:/tmp/webterminal.log
+StandardError=append:/tmp/webterminal.log
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload 2>/dev/null || true
+systemctl enable webterminal 2>/dev/null || true
+systemctl restart webterminal 2>/dev/null || true
+echo "✅ webterminal systemd service installed and started"
 
 # Asynchronously restart the OLSPanel service to load changes
 if systemctl is-active --quiet cp 2>/dev/null; then

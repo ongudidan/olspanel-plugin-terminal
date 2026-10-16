@@ -166,7 +166,7 @@ window.addEventListener("load", () => {
     startTerminalServer()
         .then(data => {
             if (!data.token) {
-                term.write("\r\n\x1b[31m[Token missing]\x1b[0m\r\n");
+                term.write("\r\n\x1b[31m[" + (data.message || "Token missing") + "]\x1b[0m\r\n");
                 return;
             }
             initWebSocket(data.token);
